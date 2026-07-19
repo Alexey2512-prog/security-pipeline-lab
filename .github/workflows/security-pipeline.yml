@@ -1,0 +1,102 @@
+name: Security Pipeline Lab
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: 1 - Functional tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install --requirement requirements-dev.txt
+      - run: python -m pytest
+
+  sast:
+    name: 2 - SAST with Semgrep
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan source code and fail on findings
+        run: semgrep scan --config security/semgrep.yml --error app
+
+  sca:
+    name: 3 - SCA with pip-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit the deliberately vulnerable dependency fixture
+        uses: pypa/gh-action-pip-audit@v1.1.0
+        with:
+          inputs: lab/vulnerable-requirements.txt
+
+  container-scan:
+    name: 4 - Container scan with Trivy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the application image
+        run: docker build --tag security-pipeline-lab:${{ github.sha }} .
+      - name: Scan OS and Python packages
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: security-pipeline-lab:${{ github.sha }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          vuln-type: os,library
+          exit-code: "1"
+
+  dast:
+    name: 5 - DAST with OWASP ZAP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build isolated target image
+        run: docker build --tag security-pipeline-lab:dast .
+      - name: Start the target in a private Docker network
+        run: |
+          docker network create security-lab
+          docker run --detach --name lab-app --network security-lab security-pipeline-lab:dast
+      - name: Wait for the application health check
+        run: |
+          for attempt in {1..30}; do
+            if docker run --rm --network security-lab curlimages/curl:8.14.1 --fail http://lab-app:8080/health; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+      - name: Actively scan only the isolated training target
+        run: |
+          mkdir -p reports
+          docker run --rm --network security-lab \
+            --volume "${PWD}/reports:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-full-scan.py -t http://lab-app:8080 -m 1 -T 5 \
+            -r zap-report.html -J zap-report.json
+      - name: Upload ZAP reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-reports
+          path: reports/
+          if-no-files-found: warn
+      - name: Stop the isolated lab
+        if: always()
+        run: |
+          docker rm --force lab-app || true
+          docker network rm security-lab || true
+

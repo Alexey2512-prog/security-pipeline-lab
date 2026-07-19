@@ -82,6 +82,8 @@ jobs:
       - name: Actively scan only the isolated training target
         run: |
           mkdir -p reports
+          # The official ZAP container writes as UID 1000 rather than root.
+          sudo chown 1000:1000 reports
           docker run --rm --network security-lab \
             --volume "${PWD}/reports:/zap/wrk/:rw" \
             ghcr.io/zaproxy/zaproxy:stable \
@@ -99,4 +101,3 @@ jobs:
         run: |
           docker rm --force lab-app || true
           docker network rm security-lab || true
-

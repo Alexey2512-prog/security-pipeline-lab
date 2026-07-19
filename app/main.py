@@ -23,11 +23,18 @@ def create_app() -> Flask:
 
     @app.get("/")
     def index():
-        return jsonify(
-            service="security-pipeline-lab",
-            warning="Intentionally vulnerable. Local training use only.",
-            endpoints=["/health", "/search?q=...", "/products?name=..."],
-        )
+        # HTML links give a DAST spider an explicit, reproducible attack surface.
+        # Without links or an API specification, a scanner may never discover
+        # query parameters such as q and name.
+        return """
+        <h1>Security Pipeline Lab</h1>
+        <p>Intentionally vulnerable. Local training use only.</p>
+        <ul>
+          <li><a href="/health">Health check</a></li>
+          <li><a href="/search?q=demo">Search demo</a></li>
+          <li><a href="/products?name=Keyboard">Product demo</a></li>
+        </ul>
+        """
 
     @app.get("/health")
     def health():
@@ -63,4 +70,3 @@ def create_app() -> Flask:
 if __name__ == "__main__":
     # Loopback-only binding reduces the chance of accidental network exposure.
     create_app().run(host="127.0.0.1", port=8080, debug=False)
-

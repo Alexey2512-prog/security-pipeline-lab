@@ -13,6 +13,15 @@ def test_health_endpoint():
     assert response.get_json() == {"status": "ok"}
 
 
+def test_index_exposes_crawlable_security_lab_endpoints():
+    response = client().get("/")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'href="/search?q=demo"' in html
+    assert 'href="/products?name=Keyboard"' in html
+
+
 def test_product_search_returns_expected_product():
     response = client().get("/products?name=Keyboard")
     assert response.status_code == 200
@@ -23,4 +32,3 @@ def test_search_reflects_input_for_scanner_lab():
     response = client().get("/search?q=security")
     assert response.status_code == 200
     assert b"security" in response.data
-

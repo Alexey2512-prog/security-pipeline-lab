@@ -1,0 +1,25 @@
+rules:
+  - id: lab.python.sql-injection.f-string
+    message: >-
+      User-controlled data is interpolated into a SQL query. Use a
+      parameterized query so data cannot become executable SQL syntax.
+    severity: ERROR
+    languages: [python]
+    patterns:
+      - pattern: $SQL = f"..."
+      - pattern-inside: |
+          def $FUNC(...):
+            ...
+            $SQL = f"..."
+            ...
+            $CONNECTION.execute($SQL)
+            ...
+
+  - id: lab.python.flask.reflected-xss
+    message: >-
+      Markup is applied to HTML containing user-controlled input. Flask will
+      return it without escaping, which can enable reflected XSS.
+    severity: ERROR
+    languages: [python]
+    pattern: return Markup(f"...")
+

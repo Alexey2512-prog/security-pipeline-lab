@@ -1,0 +1,4 @@
+# Deliberately old package for the SCA lesson. It is not used by the app.
+# pip-audit should report known advisories and return a non-zero exit code.
+urllib3==1.26.5
+
